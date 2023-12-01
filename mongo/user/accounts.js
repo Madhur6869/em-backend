@@ -35,7 +35,11 @@ const accountsScehma = new mongoose.Schema({
   },
   otp_auth_url:{
     type:String
-  }},
+  },
+  interested_sports:{
+    type:Array
+  }
+},
 {collection:"accounts"}
 );
 

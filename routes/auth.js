@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const OTPAuth = require("otpauth");
 const { encode } = require("hi-base32");
 const { v4: uuidv4 } = require("uuid");
+const jwt = require("jsonwebtoken");
 
 const express = require("express");
 const app = express();
@@ -105,7 +106,17 @@ app.post("/oauth-sign-in", async (req, res) => {
   try {
     //If user already exists: - generate creds
     //Else create users and then generate creds
-    const { email, username: OAuthUsername, role } = req.body;
+    const { email, username: OAuthUsername, role,token} = req.body;
+
+    if(!token || !email || !OAuthUsername){
+      res.status(400).send({err:"Fields are missing"})
+      return
+    }
+    if(token!==process.env.OAUTH_CLIENTID){
+      res.status(400).send({err:"Invalid origin"})
+      return
+    }
+
     const user = await accounts.findOne({ email: email, AuthType: "OAuth" });
 
     if (user) {
@@ -375,6 +386,40 @@ app.get("/disable-2FA",async(req,res)=>{
   }catch (err) {
     console.log(err);
     res.status(500).send({ err: "Internal Server Error" });
+  }
+})
+
+app.get("/2FA-check",async(req,res)=>{
+  try {
+    const { email, password } = req.query;
+    if (!email || !password) {
+      res.status(400).send({ error: "Required fields are missing" });
+      return;
+    }
+    const user = await accounts.findOne({
+      $or: [
+        { username: email, AuthType: "Credentials" },
+        { email: email, AuthType: "Credentials" },
+      ],
+    });
+    if (user) {
+      const {
+        uid,
+        password: hashedPassword,
+        otp_enabled
+      } = user;
+      if (bcrypt.compareSync(password, hashedPassword)) {
+       
+        res.status(200).send({data:{TwoFactorAuth:otp_enabled,uid:uid}});
+      } else {
+        res.status(401).send({ error: "Invalid Password" });
+      }
+    } else {
+      res.status(401).send({ error: "user not found" });
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(500).send({ error: "Server Error" });
   }
 })
 
